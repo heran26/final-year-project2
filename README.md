@@ -1,5 +1,5 @@
 
-# 🎉 EduJoy – Personalized & Inclusive Learning App for Kids
+# 🎉 EduJoy – Personalized & Inclusive Learning App for Children
 
 **EduJoy** is a mobile learning platform designed to provide a **personalized, fun, and inclusive educational experience** for children aged 4–10. Built with love and purpose, EduJoy empowers kids to learn at their own pace through interactive lessons in multiple languages, tailored to diverse learning needs.
 
