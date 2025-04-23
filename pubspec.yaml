@@ -1,0 +1,237 @@
+name: flutter_application_1
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.3 <4.0.0'
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.1
+  flutter_gif: ^0.0.4
+  audioplayers: ^6.4.0
+ 
+  
+
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^3.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  assets:
+    - assets/image 1.png
+    - assets/81335cd6-f2fb-4bc3-b92c-44dde6f85e30.png
+    - assets/abeba-removebg-preview 1.png  # Used for both instances
+    - assets/abeba-removebg-preview 2.png
+    - assets/abeba-removebg-preview.png
+    - assets/image 2.png
+    - assets/top1.png
+    - assets/top2.png
+    - assets/blue.png
+    - assets/topp.png
+    - assets/topp2.png
+    - assets/maingif.gif
+    - assets/tibebb-removebg-preview 1.png
+    - assets/image 7.png
+    - assets/girl-removebg-preview.png
+    - assets/boy.png
+    - assets/avatar12.png
+    - assets/avatar1.png
+    - assets/avatar2.png
+    - assets/avatar3.png
+    - assets/avatar4.png
+    - assets/avatar5.png
+    - assets/avatar6.png
+    - assets/avatar7.png
+    - assets/avatar8.png
+    - assets/avatar9.png
+    - assets/avatar10.png
+    - assets/avatar11.png
+    - assets/Vector.png
+    - assets/image.png
+    - assets/science1.png
+    - assets/image3.png
+    - assets/Vector3.png
+    - assets/Vector2.png
+    - assets/finalgif.gif
+    - assets/sini.png
+    - assets/sini.png
+    - assets/reversed.gif
+    - assets/curve1.png
+    - assets/1.png
+    - assets/2.png
+    - assets/3.png
+    - assets/4.png
+    - assets/back.png
+    - assets/background.png
+    - assets/sign.png
+    - assets/char1.PNG
+    - assets/ሀ.png
+    - assets/char2.PNG
+    - assets/ሁ.png
+    - assets/shake.gif
+    - assets/birds.gif
+    - assets/bird.gif
+    - assets/signn.gif
+    - assets/stand.gif
+    - assets/ሀ.m4a
+    - assets/ሁ.m4a
+    - assets/ሂ.m4a
+    - assets/ሃ.m4a
+    - assets/ሄ.m4a
+    - assets/ህ.m4a
+    - assets/ሆ.m4a
+    - assets/ለ.m4a
+    - assets/ሉ.m4a
+    - assets/ሊ.m4a
+    - assets/ላ.m4a
+    - assets/ሌ.m4a
+    - assets/ል.m4a
+    - assets/ሎ.m4a
+    - assets/spaceBG.jpg
+    - assets/earth.png
+    - assets/charr0.png
+    - assets/charr1.png
+    - assets/spacemission.png
+    - assets/head.png
+    - assets/body.png
+    - assets/astronaut0.png
+    - assets/rocket.png
+    - assets/rocket2.png
+    - assets/rocket3.png
+    - assets/dashrocket.png
+    - assets/dashed3.png
+    - assets/dashed2.png
+    - assets/fullrocket.png
+    - assets/bg.jpg
+    - assets/jupiter.png
+    - assets/venus.png
+    - assets/mercury.png
+    - assets/neptune.png
+    - assets/ethflag.png
+    - assets/earth2.png
+    - assets/mars.png
+    - assets/saturn.png
+    - assets/sun.png
+    - assets/on.png
+    - assets/off.png
+    - assets/button1.png
+    - assets/button2.png
+    - assets/uranus.png
+    - assets/background2.png
+    - assets/rocketmain.gif
+    - assets/meteor.png
+    - assets/bluerocket.png
+    - assets/explosion.png
+    - assets/explosion.gif
+    - assets/no1.png
+    - assets/no2.jpg
+    - assets/no3.jpg
+    - assets/no4.jpg
+    - assets/no5.jpg
+    - assets/no6.jpg
+    - assets/lion.png
+    - assets/lion2.png
+    - assets/hut.png
+    - assets/adeyabeba.png
+    - assets/one.png
+    - assets/elephant.png
+    - assets/elephant2.png
+    - assets/two.png
+    - assets/cover1.png
+    - assets/cover2.jpg
+    - assets/cover3.jpg
+    - assets/avatari.png
+    - assets/avatarii.png
+    - assets/avatariii.png
+    - assets/avatariv.png
+    - assets/avatarv.png
+    - assets/avatarvi.png
+    - assets/avatarvii.png
+    - assets/avatarviii.png
+    - assets/avatarviiii.png
+    - assets/avatar102.png
+    - assets/avatar112.png
+    - assets/avatar122.png
+    - assets/tick.png
+    
+    
+    
+   
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/assets-and-images/#resolution-aware
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/assets-and-images/#from-packages
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  
+
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  # fonts:
+  #   - family: Rubik
+  #     fonts:
+  #       - asset: fonts/Rubik-Regular.ttf
+  #       - asset: fonts/Rubik-Medium.ttf
+  #         weight: 600
+  # #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/custom-fonts/#from-packages

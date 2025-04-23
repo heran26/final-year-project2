@@ -1,0 +1,163 @@
+import 'package:flutter/material.dart';
+
+class GirlsAvatarPickerScreen extends StatefulWidget {
+  const GirlsAvatarPickerScreen({super.key});
+
+  @override
+  State<GirlsAvatarPickerScreen> createState() => _GirlsAvatarPickerScreenState();
+}
+
+class _GirlsAvatarPickerScreenState extends State<GirlsAvatarPickerScreen> {
+  String? _selectedAvatar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: 360,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 0,
+                    blurRadius: 4,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16, top: 16),
+                child: BackButton(
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(left: 68, top: 14),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Pick an Avatar',
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 34,
+                    fontWeight: FontWeight.w700,
+                    color: Color.fromRGBO(0, 0, 0, 0.84),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: GridView.count(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 7,
+                  mainAxisSpacing: 14,
+                  padding: const EdgeInsets.only(top: 24, bottom: 24),
+                  children: [
+                    _buildAvatarContainer('assets/avatar1.png', 134, 141),
+                    _buildAvatarContainer('assets/avatar2.png', 174, 127),
+                    _buildAvatarContainer('assets/avatar3.png', 152, 134),
+                    _buildAvatarContainer('assets/avatar4.png', 150, 116),
+                    _buildAvatarContainer('assets/avatar5.png', 201, 123),
+                    _buildAvatarContainer('assets/avatar6.png', 152, 127),
+                    _buildAvatarContainer('assets/avatar7.png', 187, 96),
+                    _buildAvatarContainer('assets/avatar8.png', 162, 139),
+                    _buildAvatarContainer('assets/avatar9.png', 152, 138),
+                    _buildAvatarContainer('assets/avatar10.png', 154, 137),
+                    _buildAvatarContainer('assets/avatar11.png', 166, 126),
+                    _buildAvatarContainer('assets/avatar12.png', 133, 141),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12, bottom: 12),
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: ElevatedButton(
+                  onPressed: _selectedAvatar != null
+                      ? () {
+                          Navigator.pushNamed(context, '/main');
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2DE548),
+                    foregroundColor: const Color(0xFF0B521E),
+                    minimumSize: const Size(72, 44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: const BorderSide(
+                        color: Color(0xFF0B521E),
+                        width: 5,
+                      ),
+                    ),
+                    elevation: 4,
+                  ),
+                  child: Image.asset(
+                    'assets/tick.png',
+                    width: 36,
+                    height: 36,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarContainer(String imagePath, double width, double height) {
+    bool isSelected = _selectedAvatar == imagePath;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedAvatar = imagePath;
+        });
+      },
+      child: Container(
+        width: 110,
+        height: 106,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF8BE0),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.black,
+            width: 5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.2),
+              spreadRadius: 0,
+              blurRadius: 4,
+              offset: const Offset(0, 4),
+            ),
+            if (isSelected)
+              BoxShadow(
+                color: Colors.yellow.withOpacity(0.7),
+                spreadRadius: 2,
+                blurRadius: 8,
+              ),
+          ],
+        ),
+        child: Center(
+          child: Image.asset(
+            imagePath,
+            width: width * 0.8,
+            height: height * 0.8,
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+  }
+}
