@@ -14,14 +14,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _schoolController = TextEditingController();
   final TextEditingController _dateOfBirthController = TextEditingController();
   final TextEditingController _gradeController = TextEditingController();
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _schoolFocusNode = FocusNode();
   final FocusNode _dateOfBirthFocusNode = FocusNode();
   final FocusNode _gradeFocusNode = FocusNode();
-  final FocusNode _usernameFocusNode = FocusNode();
+  final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
 
   String? _selectedGender = 'Female';
@@ -59,9 +59,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _gradeController.clear();
       }
     });
-    _usernameFocusNode.addListener(() {
-      if (_usernameFocusNode.hasFocus && _usernameController.text.isEmpty) {
-        _usernameController.clear();
+    _emailFocusNode.addListener(() {
+      if (_emailFocusNode.hasFocus && _emailController.text.isEmpty) {
+        _emailController.clear();
       }
     });
     _passwordFocusNode.addListener(() {
@@ -76,7 +76,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _schoolController.text.isEmpty ||
         _dateOfBirthController.text.isEmpty ||
         _gradeController.text.isEmpty ||
-        _usernameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
         _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
@@ -89,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final url = Uri.parse('https://flutter-backend-heran25-mhglxjaob-heran25s-projects.vercel.app/register');
+      final url = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/register');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -99,24 +99,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'school': _schoolController.text.trim(),
           'dateOfBirth': _dateOfBirthController.text.trim(),
           'grade': _gradeController.text.trim(),
-          'username': _usernameController.text.trim(),
+          'email': _emailController.text.trim(),
           'password': _passwordController.text.trim(),
         }),
       );
 
       final responseData = jsonDecode(response.body);
-      if (response.statusCode == 201) {
-        print('User registered successfully with ID: ${responseData['id']}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration successful!')),
-        );
-        
+      if (response.statusCode == 200) {
+        print('Registration successful: ${responseData['message']}');
+        // Prepare registration data to pass to avatar picker
+        final registrationData = {
+          'name': _nameController.text.trim(),
+          'gender': _selectedGender,
+          'school': _schoolController.text.trim(),
+          'dateOfBirth': _dateOfBirthController.text.trim(),
+          'grade': _gradeController.text.trim(),
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text.trim(),
+        };
+        // Navigate to avatar picker based on gender
         if (_selectedGender == 'Female') {
-          Navigator.pushNamed(context, '/avatar_girl');
+          Navigator.pushNamed(
+            context,
+            '/avatar_girl',
+            arguments: registrationData,
+          );
         } else if (_selectedGender == 'Male') {
-          Navigator.pushNamed(context, '/avatar_boy');
+          Navigator.pushNamed(
+            context,
+            '/avatar_boy',
+            arguments: registrationData,
+          );
         } else {
-          Navigator.pushNamed(context, '/main');
+          // For 'Other', default to female avatars
+          Navigator.pushNamed(
+            context,
+            '/avatar_girl',
+            arguments: registrationData,
+          );
         }
       } else {
         print('Registration failed: ${responseData['error']}');
@@ -491,7 +511,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               width: 103 * widthScale,
               height: 22 * heightScale,
               child: const Text(
-                'Username',
+                'Email',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -519,8 +539,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               width: 260 * widthScale,
               height: 40 * heightScale,
               child: TextField(
-                controller: _usernameController,
-                focusNode: _usernameFocusNode,
+                controller: _emailController,
+                focusNode: _emailFocusNode,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   isDense: true,
@@ -657,13 +677,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _schoolController.dispose();
     _dateOfBirthController.dispose();
     _gradeController.dispose();
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _nameFocusNode.dispose();
     _schoolFocusNode.dispose();
     _dateOfBirthFocusNode.dispose();
     _gradeFocusNode.dispose();
-    _usernameFocusNode.dispose();
+    _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     super.dispose();
   }

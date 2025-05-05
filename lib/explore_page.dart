@@ -41,31 +41,7 @@ class ExplorePage extends StatelessWidget {
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
                   children: [
-                    InterestCard(
-                      title: "Nature",
-                      color: Color(0xFFE6FFA2),
-                      borderColor: Color(0xFFCBEA7B),
-                      image: 'assets/image3.png',
-                    ),
-                    InterestCard(
-                      title: "English",
-                      color: Color(0xFFFCE2B9),
-                      borderColor: Color(0xFFEDD0A2),
-                      image: 'assets/image.png',
-                    ),
-                    InterestCard(
-                      title: "Science",
-                      color: Color(0xFFCBECFF),
-                      borderColor: Color(0xFFB9D3E3),
-                      image: 'assets/science1.png',
-                    ),
-                    InterestCard(
-                      title: "History",
-                      color: Color(0xFFFFD7D7),
-                      borderColor: Color(0xFFE8B8B8),
-                      image: 'assets/history_image.png',
-                    ),
-                  ],
+                  ]
                 ),
               ),
             ],

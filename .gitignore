@@ -62,3 +62,4 @@ app.*.map.json
 *.iml
 *.swp
 .DS_Store
+.vercel

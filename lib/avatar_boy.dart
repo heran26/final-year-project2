@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AvatarPickerScreen extends StatefulWidget {
   const AvatarPickerScreen({super.key});
@@ -9,6 +10,47 @@ class AvatarPickerScreen extends StatefulWidget {
 
 class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
   String? _selectedAvatar;
+  Map<String, dynamic>? _registrationData;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _registrationData = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    });
+  }
+
+  Future<void> _proceedToVerification() async {
+    if (_selectedAvatar == null || _registrationData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an avatar')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Store the selected avatar locally using SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_avatar', _selectedAvatar!);
+
+      // Navigate to the verification page
+      Navigator.pushNamed(context, '/verify', arguments: _registrationData!['email']);
+    } catch (e) {
+      print('Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +66,7 @@ class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Color.fromARGB(255, 17, 208, 87).withOpacity(0.2),
+                    color: Colors.grey.withOpacity(0.2),
                     spreadRadius: 0,
                     blurRadius: 4,
                     offset: const Offset(0, 4),
@@ -83,10 +125,8 @@ class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
               child: Align(
                 alignment: Alignment.bottomRight,
                 child: ElevatedButton(
-                  onPressed: _selectedAvatar != null
-                      ? () {
-                          Navigator.pushNamed(context, '/main');
-                        }
+                  onPressed: _selectedAvatar != null && !_isLoading
+                      ? _proceedToVerification
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2DE548),
@@ -101,11 +141,13 @@ class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
                     ),
                     elevation: 4,
                   ),
-                  child: Image.asset(
-                    'assets/tick.png',
-                    width: 36,
-                    height: 36,
-                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Color(0xFF0B521E))
+                      : Image.asset(
+                          'assets/tick.png',
+                          width: 36,
+                          height: 36,
+                        ),
                 ),
               ),
             ),
@@ -117,7 +159,7 @@ class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
 
   Widget _buildAvatarContainer(String imagePath, double width, double height) {
     bool isSelected = _selectedAvatar == imagePath;
-    
+
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -128,7 +170,7 @@ class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
         width: 110,
         height: 106,
         decoration: BoxDecoration(
-          color: Color.fromARGB(255, 109, 120, 244),
+          color: const Color.fromARGB(255, 109, 120, 244),
           shape: BoxShape.circle,
           border: Border.all(
             color: Colors.black,
@@ -143,7 +185,7 @@ class _AvatarPickerScreenState extends State<AvatarPickerScreen> {
             ),
             if (isSelected)
               BoxShadow(
-                color:  Colors.yellow.withOpacity(0.7),
+                color: Colors.yellow.withOpacity(0.7),
                 spreadRadius: 5,
                 blurRadius: 8,
               ),

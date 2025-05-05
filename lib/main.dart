@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'register.dart';
+import 'login.dart';
+import 'verify.dart';
+import 'reset_password.dart';
 import 'avatar_girl.dart';
 import 'avatar_boy.dart';
 import 'main2.dart';
@@ -24,6 +27,9 @@ class MyApp extends StatelessWidget {
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/verify': (context) => VerifyScreen(email: ModalRoute.of(context)!.settings.arguments as String),
+        '/login': (context) => const LoginScreen(),
+        '/reset-password': (context) => ResetPasswordScreen(email: ModalRoute.of(context)!.settings.arguments as String),
         '/avatar_girl': (context) => const GirlsAvatarPickerScreen(),
         '/avatar_boy': (context) => const AvatarPickerScreen(),
         '/main': (context) => const MainPage(),
@@ -238,7 +244,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               height: 22 * heightScale,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, '/register');
+                  Navigator.pushNamed(context, '/login');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
@@ -306,4 +312,4 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ),
     );
   }
-}
+} 

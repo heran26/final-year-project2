@@ -33,6 +33,22 @@ dependencies:
   http: ^1.2.1
   flutter_gif: ^0.0.4
   audioplayers: ^6.4.0
+  webview_flutter: ^4.0.0
+  video_player: ^2.9.1
+  shared_preferences: ^2.2.3
+  flutter_cache_manager: ^3.3.1
+  path_provider: ^2.1.3 
+  cached_network_image: ^3.2.3
+  supabase_flutter: ^2.0.0
+  visibility_detector: ^0.4.0+2
+  flutter_secure_storage: ^8.0.0
+  file_picker: ^8.1.2
+ 
+ 
+  
+
+
+  
  
   
 
@@ -100,8 +116,6 @@ flutter:
     - assets/Vector3.png
     - assets/Vector2.png
     - assets/finalgif.gif
-    - assets/sini.png
-    - assets/sini.png
     - assets/reversed.gif
     - assets/curve1.png
     - assets/1.png
@@ -200,6 +214,12 @@ flutter:
     - assets/avatar112.png
     - assets/avatar122.png
     - assets/tick.png
+    - assets/signlanguage.jpg
+    - assets/ants.png
+    - assets/math.gif
+    - assets/cooking.jpg
+    - assets/adventure.jpg
+    - assets/5.png
     
     
     

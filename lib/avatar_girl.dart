@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GirlsAvatarPickerScreen extends StatefulWidget {
   const GirlsAvatarPickerScreen({super.key});
@@ -9,6 +10,47 @@ class GirlsAvatarPickerScreen extends StatefulWidget {
 
 class _GirlsAvatarPickerScreenState extends State<GirlsAvatarPickerScreen> {
   String? _selectedAvatar;
+  Map<String, dynamic>? _registrationData;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _registrationData = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    });
+  }
+
+  Future<void> _proceedToVerification() async {
+    if (_selectedAvatar == null || _registrationData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an avatar')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Store the selected avatar locally using SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_avatar', _selectedAvatar!);
+
+      // Navigate to the verification page
+      Navigator.pushNamed(context, '/verify', arguments: _registrationData!['email']);
+    } catch (e) {
+      print('Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,10 +125,8 @@ class _GirlsAvatarPickerScreenState extends State<GirlsAvatarPickerScreen> {
               child: Align(
                 alignment: Alignment.bottomRight,
                 child: ElevatedButton(
-                  onPressed: _selectedAvatar != null
-                      ? () {
-                          Navigator.pushNamed(context, '/main');
-                        }
+                  onPressed: _selectedAvatar != null && !_isLoading
+                      ? _proceedToVerification
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2DE548),
@@ -101,11 +141,13 @@ class _GirlsAvatarPickerScreenState extends State<GirlsAvatarPickerScreen> {
                     ),
                     elevation: 4,
                   ),
-                  child: Image.asset(
-                    'assets/tick.png',
-                    width: 36,
-                    height: 36,
-                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Color(0xFF0B521E))
+                      : Image.asset(
+                          'assets/tick.png',
+                          width: 36,
+                          height: 36,
+                        ),
                 ),
               ),
             ),
@@ -117,7 +159,7 @@ class _GirlsAvatarPickerScreenState extends State<GirlsAvatarPickerScreen> {
 
   Widget _buildAvatarContainer(String imagePath, double width, double height) {
     bool isSelected = _selectedAvatar == imagePath;
-    
+
     return GestureDetector(
       onTap: () {
         setState(() {
