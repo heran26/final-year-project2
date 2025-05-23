@@ -21,7 +21,7 @@ class _HomePageState extends State<HomePage> {
   int _activeSlide = 0;
   bool _book1Opened = false;
   bool _signlanguageOpened = false;
-  String _book1Progress = '0%';
+  Map<String, String> _bookProgress = {};
   String _signlanguageProgress = '0%';
   late SharedPreferences _prefs;
   List<Map<String, dynamic>> _openedLessons = [];
@@ -37,14 +37,42 @@ class _HomePageState extends State<HomePage> {
   String? _userAvatar;
   bool _isLoadingUser = true;
   final storage = const FlutterSecureStorage();
+  List<BookConfig> _books = []; // List to hold all books
+  bool _isLoadingBooks = true;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
     _scrollController.addListener(_updateActiveSlide);
-    _initializePreferences();
+    _loadBooksAndProgress();
     _fetchUserData();
+  }
+
+  Future<void> _loadBooksAndProgress() async {
+    try {
+      // Fetch books (hardcoded and admin-created)
+      final adminBooks = await fetchAdminBooks();
+      final allBooks = [...hardcodedBooks, ...adminBooks];
+      _prefs = await SharedPreferences.getInstance();
+
+      setState(() {
+        _books = allBooks;
+        _isLoadingBooks = false;
+      });
+
+      await _loadProgress();
+    } catch (e) {
+      print('Error loading books: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load books: $e')),
+      );
+      setState(() {
+        _books = hardcodedBooks; // Fallback to hardcoded books
+        _isLoadingBooks = false;
+      });
+      await _loadProgress();
+    }
   }
 
   Future<void> _fetchUserData() async {
@@ -58,7 +86,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final url = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/user');
+      final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/user');
       final response = await http.get(
         url,
         headers: {
@@ -81,7 +109,7 @@ class _HomePageState extends State<HomePage> {
         );
         setState(() {
           _userName = 'User';
-          _userAvatar = 'assets/avatar8.png'; // Fallback avatar
+          _userAvatar = 'assets/avatar8.png';
           _isLoadingUser = false;
         });
       }
@@ -92,36 +120,164 @@ class _HomePageState extends State<HomePage> {
       );
       setState(() {
         _userName = 'User';
-        _userAvatar = 'assets/avatar8.png'; // Fallback avatar
+        _userAvatar = 'assets/avatar8.png';
         _isLoadingUser = false;
       });
     }
   }
 
-  Future<void> _initializePreferences() async {
-    _prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _book1Opened = _prefs.getBool('book1_opened') ?? false;
-      _signlanguageOpened = _prefs.getBool('signlanguage_opened') ?? false;
-      double book1Progress = _prefs.getDouble('book1_progress') ?? 0.0;
-      int watchedWordsCount = _prefs.getInt('watched_words_count') ?? 0;
-      double signlanguageProgress = (watchedWordsCount / 3300 * 100);
-      _book1Progress = '${book1Progress.toStringAsFixed(0)}%';
-      _signlanguageProgress = '${signlanguageProgress.toStringAsFixed(0)}%';
+  Future<void> _loadProgress() async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      Map<String, double> tempBookProgress = {};
+      double signlanguageProgress = 0.0;
 
-      String? lessonsJson = _prefs.getString('opened_lessons');
-      if (lessonsJson != null) {
-        try {
-          _openedLessons = List<Map<String, dynamic>>.from(jsonDecode(lessonsJson));
-          _openedLessons.sort((a, b) => DateTime.parse(b['opened_at']).compareTo(DateTime.parse(a['opened_at'])));
-        } catch (e) {
-          print('Error decoding opened_lessons: $e');
-          _openedLessons = [];
+      // Initialize progress for all books
+      for (var book in _books) {
+        tempBookProgress[book.bookId] = _prefs.getDouble('${book.bookId}_progress')?.clamp(0.0, 100.0) ?? 0.0;
+      }
+      signlanguageProgress = _prefs.getDouble('signlanguage_progress')?.clamp(0.0, 100.0) ?? 0.0;
+
+      // Fetch progress from backend
+      if (token != null) {
+        final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/book-progress');
+        final response = await http.get(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final backendProgress = data['bookProgress'] ?? {};
+
+          // Update progress for all books
+          for (var book in _books) {
+            if (backendProgress[book.bookId] != null) {
+              final progress = (backendProgress[book.bookId]['progress']?.toDouble() ?? 0.0).clamp(0.0, 100.0);
+              tempBookProgress[book.bookId] = progress;
+              await _prefs.setDouble('${book.bookId}_progress', progress);
+            }
+          }
+
+          // Update signlanguage progress
+          if (backendProgress['signlanguage'] != null) {
+            signlanguageProgress = (backendProgress['signlanguage']['progress']?.toDouble() ?? 0.0).clamp(0.0, 100.0);
+            await _prefs.setDouble('signlanguage_progress', signlanguageProgress);
+            await _prefs.setInt('watched_words_count', (signlanguageProgress / 100 * 3300).round());
+          }
+        } else {
+          print('Failed to fetch book progress from backend: ${response.statusCode} ${response.body}');
         }
       } else {
-        _openedLessons = [];
+        print('No JWT token found, using SharedPreferences for progress');
       }
-    });
+
+      // Update state with final progress values
+      setState(() {
+        _book1Opened = _prefs.getBool('book1_opened') ?? false;
+        _signlanguageOpened = _prefs.getBool('signlanguage_opened') ?? false;
+        _bookProgress = {
+          for (var book in _books) book.bookId: '${tempBookProgress[book.bookId]!.toStringAsFixed(0)}%'
+        };
+        _signlanguageProgress = '${signlanguageProgress.toStringAsFixed(0)}%';
+
+        String? lessonsJson = _prefs.getString('opened_lessons');
+        if (lessonsJson != null) {
+          try {
+            _openedLessons = List<Map<String, dynamic>>.from(jsonDecode(lessonsJson));
+            _openedLessons.sort((a, b) => DateTime.parse(b['opened_at']).compareTo(DateTime.parse(a['opened_at'])));
+          } catch (e) {
+            print('Error decoding opened_lessons: $e');
+            _openedLessons = [];
+          }
+        } else {
+          _openedLessons = [];
+        }
+      });
+    } catch (e) {
+      print('Error loading progress: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load progress: $e')),
+      );
+      setState(() {
+        _bookProgress = {
+          for (var book in _books)
+            book.bookId: '${(_prefs.getDouble('${book.bookId}_progress')?.clamp(0.0, 100.0) ?? 0.0).toStringAsFixed(0)}%'
+        };
+        _signlanguageProgress = '${(_prefs.getDouble('signlanguage_progress')?.clamp(0.0, 100.0) ?? 0.0).toStringAsFixed(0)}%';
+      });
+    }
+  }
+
+  Future<void> _saveSingleLessonProgress(String lessonId) async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) {
+        print('No JWT token found, saving progress locally');
+        return;
+      }
+
+      final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/update-book-progress');
+
+      if (lessonId == 'signlanguage') {
+        final progress = double.tryParse(_signlanguageProgress.replaceAll('%', ''))?.clamp(0.0, 100.0) ?? 0.0;
+        await _prefs.setDouble('signlanguage_progress', progress);
+        await _prefs.setInt('watched_words_count', (progress / 100 * 3300).round());
+
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'bookId': 'signlanguage',
+            'progress': progress,
+            'currentPage': (progress / 100 * 3300).round(),
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          print('Successfully saved signlanguage progress to backend: $progress%');
+        } else {
+          print('Failed to save signlanguage progress to backend: ${response.statusCode} ${response.body}');
+        }
+      } else {
+        final book = _books.firstWhere((b) => b.bookId == lessonId, orElse: () => throw Exception('Book not found'));
+        final progress = double.tryParse(_bookProgress[lessonId]?.replaceAll('%', '') ?? '0')?.clamp(0.0, 100.0) ?? 0.0;
+        await _prefs.setDouble('${lessonId}_progress', progress);
+
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'bookId': lessonId,
+            'progress': progress,
+            'currentPage': (progress / 100 * book.pageImageUrls.length).round().clamp(0, book.pageImageUrls.length - 1),
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          print('Successfully saved $lessonId progress to backend: $progress%');
+        } else {
+          print('Failed to save $lessonId progress to backend: ${response.statusCode} ${response.body}');
+        }
+      }
+
+      // Refresh progress after saving
+      await _loadProgress();
+    } catch (e) {
+      print('Error saving progress for $lessonId: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save progress: $e')),
+      );
+    }
   }
 
   Future<void> _updateOpenedLessons({
@@ -129,7 +285,6 @@ class _HomePageState extends State<HomePage> {
     required String title,
     required String description,
     required String image,
-    required String progress,
   }) async {
     try {
       _openedLessons.removeWhere((lesson) => lesson['id'] == id);
@@ -138,7 +293,6 @@ class _HomePageState extends State<HomePage> {
         'title': title,
         'description': description,
         'image': image,
-        'progress': progress,
         'opened_at': DateTime.now().toIso8601String(),
       });
 
@@ -149,21 +303,19 @@ class _HomePageState extends State<HomePage> {
 
       await _prefs.setString('opened_lessons', jsonEncode(_openedLessons));
 
+      // Update flags
       if (id == 'book1') {
         await _prefs.setBool('book1_opened', true);
-        double book1Progress = _prefs.getDouble('book1_progress') ?? 0.0;
         setState(() {
           _book1Opened = true;
-          _book1Progress = '${book1Progress.toStringAsFixed(0)}%';
         });
       } else if (id == 'signlanguage') {
         await _prefs.setBool('signlanguage_opened', true);
-        int watchedWordsCount = _prefs.getInt('watched_words_count') ?? 0;
-        double signlanguageProgress = (watchedWordsCount / 3300 * 100);
         setState(() {
           _signlanguageOpened = true;
-          _signlanguageProgress = '${signlanguageProgress.toStringAsFixed(0)}%';
         });
+      } else {
+        await _prefs.setBool('${id}_opened', true);
       }
 
       setState(() {
@@ -224,486 +376,526 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<bool> _onWillPop() async {
+    bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save Progress?'),
+        content: const Text('Do you want to save your progress before leaving?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSave == true) {
+      for (var book in _books) {
+        await _saveSingleLessonProgress(book.bookId);
+      }
+      await _saveSingleLessonProgress('signlanguage');
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final book1Config = books.firstWhere((book) => book.bookId == 'book1');
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F1E5),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 20, left: 24, right: 24),
-                    child: SizedBox(
-                      height: 240,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: 250,
-                            top: 0,
-                            child: Image.asset(
-                              'assets/Vector2.png',
-                              width: 23.31,
-                              height: 22.71,
-                              fit: BoxFit.cover,
+    if (_isLoadingBooks || _isLoadingUser) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final book1Config = _books.firstWhere((book) => book.bookId == 'book1', orElse: () => throw Exception('Book1 not found'));
+
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F1E5),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20, left: 24, right: 24),
+                      child: SizedBox(
+                        height: 240,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 250,
+                              top: 0,
+                              child: Image.asset(
+                                'assets/Vector2.png',
+                                width: 23.31,
+                                height: 22.71,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                          ),
-                          Positioned(
-                            left: 1,
-                            top: 10,
-                            child: Image.asset(
-                              'assets/Vector3.png',
-                              width: 280.31,
-                              height: 210.71,
-                              fit: BoxFit.cover,
+                            Positioned(
+                              left: 1,
+                              top: 10,
+                              child: Image.asset(
+                                'assets/Vector3.png',
+                                width: 280.31,
+                                height: 210.71,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Column(
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          "Hi",
+                                          style: TextStyle(
+                                            fontFamily: 'Rubik',
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF251504),
+                                            height: 1.625,
+                                          ),
+                                        ),
+                                        Text(
+                                          " ${_userName ?? 'User'}!",
+                                          style: const TextStyle(
+                                            fontFamily: 'Rubik',
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w900,
+                                            color: Color(0xFFDB4827),
+                                            height: 1.625,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      "Let's learn something new today!",
+                                      style: TextStyle(
+                                        fontFamily: 'Rubik',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                        color: Color.fromARGB(255, 17, 17, 17),
+                                        height: 1.3846,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  width: 65,
+                                  height: 63,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF8BE0),
+                                    border: Border.all(color: Colors.black, width: 5),
+                                    borderRadius: BorderRadius.circular(100),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0xFFEEEEEE),
+                                        offset: Offset(0, 4),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(100),
+                                    child: _userAvatar == null || _userAvatar!.isEmpty
+                                        ? Image.asset(
+                                            'assets/avatar8.png',
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Image.asset(
+                                            _userAvatar!,
+                                            width: 65,
+                                            height: 63,
+                                            fit: BoxFit.cover,
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 11),
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Text(
-                                        "Hi",
-                                        style: TextStyle(
-                                          fontFamily: 'Rubik',
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF251504),
-                                          height: 1.625,
-                                        ),
-                                      ),
                                       Text(
-                                        _isLoadingUser ? " User!" : " ${_userName ?? 'User'}!",
+                                        "Choose interests (${_selectedInterests.length}/5)",
                                         style: const TextStyle(
-                                          fontFamily: 'Rubik',
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w900,
-                                          color: Color(0xFFDB4827),
-                                          height: 1.625,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  const Text(
-                                    "Let's learn something new today!",
-                                    style: TextStyle(
-                                      fontFamily: 'Rubik',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w400,
-                                      color: Color.fromARGB(255, 17, 17, 17),
-                                      height: 1.3846,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                width: 65,
-                                height: 63,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFF8BE0),
-                                  border: Border.all(color: Colors.black, width: 5),
-                                  borderRadius: BorderRadius.circular(100),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0xFFEEEEEE),
-                                      offset: Offset(0, 4),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(100),
-                                  child: _isLoadingUser || _userAvatar == null || _userAvatar!.isEmpty
-                                      ? Image.asset(
-                                          'assets/avatar8.png',
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.asset(
-                                          _userAvatar!,
-                                          width: 65,
-                                          height: 63,
-                                          fit: BoxFit.cover,
-                                        ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 11),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      "Choose interests (${_selectedInterests.length}/5)",
-                                      style: const TextStyle(
-                                        fontFamily: 'Rubik',
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF251504),
-                                      ),
-                                    ),
-                                    const Text(
-                                      "View all",
-                                      style: TextStyle(
-                                        fontFamily: 'Rubik',
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w400,
-                                        color: Color(0xFFDB4827),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 20),
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  controller: _scrollController,
-                                  child: Row(
-                                    children: [
-                                      InterestCard(
-                                        title: "Nature",
-                                        color: const Color(0xFFE6FFA2),
-                                        borderColor: const Color.fromARGB(255, 67, 93, 0),
-                                        image: 'assets/image3.png',
-                                        isSelected: _selectedInterests.contains("Nature"),
-                                        onTap: () => _toggleInterest("Nature"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "English",
-                                        color: const Color(0xFFFCE2B9),
-                                        borderColor: const Color.fromARGB(255, 64, 40, 1),
-                                        image: 'assets/image.png',
-                                        isSelected: _selectedInterests.contains("English"),
-                                        onTap: () => _toggleInterest("English"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "Science",
-                                        color: const Color(0xFFCBECFF),
-                                        borderColor: const Color.fromARGB(255, 0, 39, 63),
-                                        image: 'assets/science1.png',
-                                        isSelected: _selectedInterests.contains("Science"),
-                                        onTap: () => _toggleInterest("Science"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "Amharic",
-                                        color: const Color.fromARGB(255, 248, 172, 244),
-                                        borderColor: const Color.fromARGB(222, 83, 0, 81),
-                                        image: 'assets/cover1.png',
-                                        isSelected: _selectedInterests.contains("Amharic"),
-                                        onTap: () => _toggleInterest("Amharic"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "ESL",
-                                        color: const Color.fromARGB(255, 166, 248, 232),
-                                        borderColor: const Color.fromARGB(255, 0, 55, 53),
-                                        image: 'assets/signlanguage.jpg',
-                                        isSelected: _selectedInterests.contains("ESL"),
-                                        onTap: () => _toggleInterest("ESL"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "Math",
-                                        color: const Color.fromARGB(255, 165, 247, 151),
-                                        borderColor: const Color.fromARGB(255, 1, 86, 5),
-                                        image: 'assets/math.gif',
-                                        isSelected: _selectedInterests.contains("Math"),
-                                        onTap: () => _toggleInterest("Math"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "Cooking",
-                                        color: const Color.fromARGB(255, 245, 175, 175),
-                                        borderColor: const Color.fromARGB(255, 164, 1, 39),
-                                        image: 'assets/cooking.jpg',
-                                        isSelected: _selectedInterests.contains("Cooking"),
-                                        onTap: () => _toggleInterest("Cooking"),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      InterestCard(
-                                        title: "Adventure",
-                                        color: const Color.fromARGB(255, 255, 255, 162),
-                                        borderColor: const Color.fromARGB(255, 103, 99, 0),
-                                        image: 'assets/adventure.jpg',
-                                        isSelected: _selectedInterests.contains("Adventure"),
-                                        onTap: () => _toggleInterest("Adventure"),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Dot(color: _activeSlide == 0 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
-                                const SizedBox(width: 12),
-                                Dot(color: _activeSlide == 1 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
-                                const SizedBox(width: 12),
-                                Dot(color: _activeSlide == 2 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
-                                const SizedBox(width: 12),
-                                Dot(color: _activeSlide == 3 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 11),
-                              child: GestureDetector(
-                                onTap: _selectedInterests.length == 5 ? _generateLearningPath : null,
-                                child: Container(
-                                  width: 150,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    gradient: _selectedInterests.length == 5
-                                        ? const LinearGradient(
-                                            colors: [
-                                              Color(0xFFFFC045),
-                                              Color(0xFFF3561A),
-                                            ],
-                                          )
-                                        : null,
-                                    color: _selectedInterests.length < 5 ? const Color(0xFF87837B) : null,
-                                    borderRadius: BorderRadius.circular(25),
-                                    border: Border.all(color: Color.fromARGB(255, 73, 11, 2), width: 2),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Color(0x44B7AF9A),
-                                        offset: Offset(0, 10),
-                                        blurRadius: 16.9,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      'Generate',
-                                      style: TextStyle(
-                                        fontFamily: 'Rubik',
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        color: _selectedInterests.length == 5 ? Colors.white : Colors.white70,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Padding(
-                                      padding: EdgeInsets.only(left: 16),
-                                      child: Text(
-                                        "Learning path",
-                                        style: TextStyle(
                                           fontFamily: 'Rubik',
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                           color: Color(0xFF251504),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 122),
-                                    Transform.rotate(
-                                      angle: 55.19 * 3.14159 / 180,
-                                      child: Container(
-                                        width: 3.57,
-                                        height: 7.29,
-                                        color: const Color(0x33FFFFFF),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 5),
-                                Container(
-                                  width: 382.17,
-                                  height: 352.31,
-                                  child: Stack(
-                                    children: [
-                                      Positioned(
-                                        left: 62.76,
-                                        top: 50.01,
-                                        child: Image.asset(
-                                          'assets/Vector.png',
-                                          width: 230.31,
-                                          height: 220.71,
+                                      const Text(
+                                        "View all",
+                                        style: TextStyle(
+                                          fontFamily: 'Rubik',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
+                                          color: Color(0xFFDB4827),
                                         ),
                                       ),
-                                      ..._learningPathOrder.asMap().entries.map((entry) {
-                                        int idx = entry.key;
-                                        String label = entry.value;
-                                        double top = 20.94;
-                                        double left = 2.63;
-                                        switch (idx) {
-                                          case 0:
-                                            top = 20.94;
-                                            left = 2.63;
-                                            break;
-                                          case 1:
-                                            top = 64.24;
-                                            left = 95.65;
-                                            break;
-                                          case 2:
-                                            top = 169.50;
-                                            left = 104.23;
-                                            break;
-                                          case 3:
-                                            top = 208.88;
-                                            left = 189.31;
-                                            break;
-                                          case 4:
-                                            top = 238.88;
-                                            left = 279.31;
-                                            break;
-                                          default:
-                                            top = 20.94;
-                                            left = 2.63;
-                                        }
-                                        return LearningCircle(
-                                          label: label,
-                                          left: left,
-                                          top: top,
-                                          index: idx,
-                                        );
-                                      }).toList(),
                                     ],
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 20),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    controller: _scrollController,
+                                    child: Row(
+                                      children: [
+                                        InterestCard(
+                                          title: "Nature",
+                                          color: const Color(0xFFE6FFA2),
+                                          borderColor: const Color.fromARGB(255, 67, 93, 0),
+                                          image: 'assets/image3.png',
+                                          isSelected: _selectedInterests.contains("Nature"),
+                                          onTap: () => _toggleInterest("Nature"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "English",
+                                          color: const Color(0xFFFCE2B9),
+                                          borderColor: const Color.fromARGB(255, 64, 40, 1),
+                                          image: 'assets/image.png',
+                                          isSelected: _selectedInterests.contains("English"),
+                                          onTap: () => _toggleInterest("English"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "Science",
+                                          color: const Color(0xFFCBECFF),
+                                          borderColor: const Color.fromARGB(255, 0, 39, 63),
+                                          image: 'assets/science1.png',
+                                          isSelected: _selectedInterests.contains("Science"),
+                                          onTap: () => _toggleInterest("Science"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "Amharic",
+                                          color: const Color.fromARGB(255, 248, 172, 244),
+                                          borderColor: const Color.fromARGB(222, 83, 0, 81),
+                                          image: 'assets/cover1.png',
+                                          isSelected: _selectedInterests.contains("Amharic"),
+                                          onTap: () => _toggleInterest("Amharic"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "ESL",
+                                          color: const Color.fromARGB(255, 166, 248, 232),
+                                          borderColor: const Color.fromARGB(255, 0, 55, 53),
+
+                                          image: 'assets/signlanguage.jpg',
+                                          isSelected: _selectedInterests.contains("ESL"),
+                                          onTap: () => _toggleInterest("ESL"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "Math",
+                                          color: const Color.fromARGB(255, 165, 247, 151),
+                                          borderColor: const Color.fromARGB(255, 1, 86, 5),
+                                          image: 'assets/math.gif',
+                                          isSelected: _selectedInterests.contains("Math"),
+                                          onTap: () => _toggleInterest("Math"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "Cooking",
+                                          color: const Color.fromARGB(255, 245, 175, 175),
+                                          borderColor: const Color.fromARGB(255, 164, 1, 39),
+                                          image: 'assets/cooking.jpg',
+                                          isSelected: _selectedInterests.contains("Cooking"),
+                                          onTap: () => _toggleInterest("Cooking"),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        InterestCard(
+                                          title: "Adventure",
+                                          color: const Color.fromARGB(255, 255, 255, 162),
+                                          borderColor: const Color.fromARGB(255, 103, 99, 0),
+                                          image: 'assets/adventure.jpg',
+                                          isSelected: _selectedInterests.contains("Adventure"),
+                                          onTap: () => _toggleInterest("Adventure"),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 11),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "Continue lesson",
-                                  style: TextStyle(
-                                    fontFamily: 'Rubik',
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF251504),
+                            const SizedBox(height: 20),
+                            Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Dot(color: _activeSlide == 0 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
+                                  const SizedBox(width: 12),
+                                  Dot(color: _activeSlide == 1 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
+                                  const SizedBox(width: 12),
+                                  Dot(color: _activeSlide == 2 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
+                                  const SizedBox(width: 12),
+                                  Dot(color: _activeSlide == 3 ? const Color(0xFF251504) : const Color(0xFFA9A391)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 11),
+                                child: GestureDetector(
+                                  onTap: _selectedInterests.length == 5 ? _generateLearningPath : null,
+                                  child: Container(
+                                    width: 150,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      gradient: _selectedInterests.length == 5
+                                          ? const LinearGradient(
+                                              colors: [
+                                                Color(0xFFFFC045),
+                                                Color(0xFFF3561A),
+                                              ],
+                                            )
+                                          : null,
+                                      color: _selectedInterests.length < 5 ? const Color(0xFF87837B) : null,
+                                      borderRadius: BorderRadius.circular(25),
+                                      border: Border.all(color: const Color.fromARGB(255, 73, 11, 2), width: 2),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x44B7AF9A),
+                                          offset: Offset(0, 10),
+                                          blurRadius: 16.9,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'Generate',
+                                        style: TextStyle(
+                                          fontFamily: 'Rubik',
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          color: _selectedInterests.length == 5 ? Colors.white : Colors.white70,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 20),
-                                ..._openedLessons.map((lesson) {
-                                  return Column(
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      GestureDetector(
-                                        onTap: () async {
-                                          double progress = lesson['id'] == 'book1'
-                                              ? (_prefs.getDouble('book1_progress') ?? 0.0)
-                                              : ((_prefs.getInt('watched_words_count') ?? 0) / 3300 * 100);
-                                          await _updateOpenedLessons(
-                                            id: lesson['id'],
+                                      const Padding(
+                                        padding: EdgeInsets.only(left: 16),
+                                        child: Text(
+                                          "Learning path",
+                                          style: TextStyle(
+                                            fontFamily: 'Rubik',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF251504),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 122),
+                                      Transform.rotate(
+                                        angle: 55.19 * 3.14159 / 180,
+                                        child: Container(
+                                          width: 3.57,
+                                          height: 7.29,
+                                          color: const Color(0x33FFFFFF),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Container(
+                                    width: 382.17,
+                                    height: 352.31,
+                                    child: Stack(
+                                      children: [
+                                        Positioned(
+                                          left: 62.76,
+                                          top: 50.01,
+                                          child: Image.asset(
+                                            'assets/Vector.png',
+                                            width: 230.31,
+                                            height: 220.71,
+                                          ),
+                                        ),
+                                        ..._learningPathOrder.asMap().entries.map((entry) {
+                                          int idx = entry.key;
+                                          String label = entry.value;
+                                          double top = 20.94;
+                                          double left = 2.63;
+                                          switch (idx) {
+                                            case 0:
+                                              top = 20.94;
+                                              left = 2.63;
+                                              break;
+                                            case 1:
+                                              top = 64.24;
+                                              left = 95.65;
+                                              break;
+                                            case 2:
+                                              top = 169.50;
+                                              left = 104.23;
+                                              break;
+                                            case 3:
+                                              top = 208.88;
+                                              left: 189.31;
+                                              break;
+                                            case 4:
+                                              top = 238.88;
+                                              left = 279.31;
+                                              break;
+                                            default:
+                                              top = 20.94;
+                                              left = 2.63;
+                                          }
+                                          return LearningCircle(
+                                            label: label,
+                                            left: left,
+                                            top: top,
+                                            index: idx,
+                                          );
+                                        }).toList(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 11),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "Continue lesson",
+                                    style: TextStyle(
+                                      fontFamily: 'Rubik',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF251504),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ..._openedLessons.map((lesson) {
+                                    final lessonId = lesson['id'];
+                                    final progress = lessonId == 'signlanguage'
+                                        ? _signlanguageProgress
+                                        : (_bookProgress[lessonId] ?? '0%');
+                                    return Column(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () async {
+                                            await _updateOpenedLessons(
+                                              id: lessonId,
+                                              title: lesson['title'],
+                                              description: lesson['description'],
+                                              image: lesson['image'],
+                                            );
+                                            if (lessonId.startsWith('book')) {
+                                              await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(builder: (context) => PreloadApp(bookId: lessonId)),
+                                              );
+                                              await _saveSingleLessonProgress(lessonId);
+                                            } else if (lessonId == 'signlanguage') {
+                                              await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(builder: (context) => const VideoListScreen()),
+                                              );
+                                              await _saveSingleLessonProgress(lessonId);
+                                            }
+                                          },
+                                          child: LessonCard(
                                             title: lesson['title'],
                                             description: lesson['description'],
+                                            progress: progress,
                                             image: lesson['image'],
-                                            progress: '${progress.toStringAsFixed(0)}%',
-                                          );
-                                          if (lesson['id'] == 'book1') {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(builder: (context) => const PreloadApp(bookId: 'book1')),
-                                            );
-                                          } else if (lesson['id'] == 'signlanguage') {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(builder: (context) => const VideoListScreen()),
-                                            );
-                                          }
-                                          await _initializePreferences();
-                                        },
-                                        child: LessonCard(
-                                          title: lesson['title'],
-                                          description: lesson['description'],
-                                          progress: lesson['progress'],
-                                          image: lesson['image'],
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 20),
-                                    ],
-                                  );
-                                }).toList(),
-                              ],
+                                        const SizedBox(height: 20),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
                             ),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                        Positioned(
+                          left: -14,
+                          top: -280,
+                          child: Image.asset(
+                            'assets/curve1.png',
+                            width: 450,
+                            height: 27,
+                            fit: BoxFit.cover,
                           ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                      Positioned(
-                        left: -14,
-                        top: -280,
-                        child: Image.asset(
-                          'assets/curve1.png',
-                          width: 450,
-                          height: 27,
-                          fit: BoxFit.cover,
                         ),
-                      ),
-                      Positioned(
-                        left: -14,
-                        top: -20,
-                        child: Image.asset(
-                          'assets/curve1.png',
-                          width: 450,
-                          height: 7,
-                          fit: BoxFit.cover,
+                        Positioned(
+                          left: -14,
+                          top: -20,
+                          child: Image.asset(
+                            'assets/curve1.png',
+                            width: 450,
+                            height: 7,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        left: 1,
-                        top: -190.5,
-                        child: Image.asset(
-                          'assets/finalgif.gif',
-                          width: 370,
-                          height: 170,
-                          fit: BoxFit.cover,
+                        Positioned(
+                          left: 1,
+                          top: -190.5,
+                          child: Image.asset(
+                            'assets/finalgif.gif',
+                            width: 370,
+                            height: 170,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -852,7 +1044,7 @@ class LearningCircle extends StatelessWidget {
               boxShadow: const [
                 BoxShadow(
                   color: Color(0xFFEEEEEE),
-                  offset: Offset(0, 5),
+                  offset: Offset(0, 4),
                   blurRadius: 4,
                 ),
               ],
@@ -902,7 +1094,7 @@ class LessonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    double progressValue = double.tryParse(progress.replaceAll('%', '')) ?? 0.0;
+    double progressValue = double.tryParse(progress.replaceAll('%', ''))?.clamp(0.0, 100.0) ?? 0.0;
 
     return VisibilityDetector(
       key: Key('lesson-card-$title'),
@@ -987,8 +1179,7 @@ class AnimatedPieChart extends StatefulWidget {
   _AnimatedPieChartState createState() => _AnimatedPieChartState();
 }
 
-class _AnimatedPieChartState extends State<AnimatedPieChart>
-    with SingleTickerProviderStateMixin {
+class _AnimatedPieChartState extends State<AnimatedPieChart> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
   bool _hasAnimated = false;

@@ -30,7 +30,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     });
 
     try {
-      final url = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/reset-password');
+      final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/reset-password');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

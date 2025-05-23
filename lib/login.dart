@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final url = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/login');
+      final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/login');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -77,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final url = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/forgot-password');
+      final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/forgot-password');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

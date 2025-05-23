@@ -1,40 +1,189 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'amharic_letter.dart'; // Import Amharic game
-import 'space_game.dart'; // Import Space game
-import 'numbers_game.dart'; // Import Numbers game
+import 'package:shared_preferences/shared_preferences.dart';
+import 'progress_calculate.dart';
+import 'amharic_letter.dart';
+import 'space_game.dart';
+import 'numbers_game.dart';
+import 'signlanguage_game.dart';
+import 'english_letter.dart';
 
-class GamesPage extends StatelessWidget {
+class GameConfig {
+  final String gameId;
+  final String title;
+  final String description;
+  final String coverImage;
+  final String category;
+  final String module;
+
+  GameConfig({
+    required this.gameId,
+    required this.title,
+    required this.description,
+    required this.coverImage,
+    required this.category,
+    required this.module,
+  });
+}
+
+final List<GameConfig> hardcodedGames = [
+  GameConfig(
+    gameId: 'amharic_letters',
+    title: 'Amharic Letters',
+    description: 'Learn Amharic letters through fun activities',
+    coverImage: 'assets/cover1.png',
+    category: 'Language',
+    module: 'Amharic',
+  ),
+  GameConfig(
+    gameId: 'english_letters',
+    title: 'English Letters',
+    description: 'Practice English alphabet with interactive games',
+    coverImage: 'assets/cover2.png',
+    category: 'Language',
+    module: 'English',
+  ),
+  GameConfig(
+    gameId: 'space_exploration',
+    title: 'Space Exploration',
+    description: 'Explore the universe with exciting challenges',
+    coverImage: 'assets/cover2.jpg',
+    category: 'Science',
+    module: 'Science',
+  ),
+  GameConfig(
+    gameId: 'numbers',
+    title: 'Numbers',
+    description: 'Master numbers through engaging math games',
+    coverImage: 'assets/cover3.jpg',
+    category: 'Math',
+    module: 'Math',
+  ),
+  GameConfig(
+    gameId: 'esl',
+    title: 'ESL',
+    description: 'Learn sign language basics',
+    coverImage: 'assets/signlanguage.jpg',
+    category: 'ESL',
+    module: 'ESL',
+  ),
+];
+
+final Map<String, List<String>> gameModuleMapping = {
+  'amharic_letters': ['Amharic', 'Language'],
+  'english_letters': ['English', 'Language'],
+  'space_exploration': ['Science', 'Adventure', 'New'],
+  'numbers': ['Math'],
+  'esl': ['ESL'],
+};
+
+class GamesPage extends StatefulWidget {
+  const GamesPage({super.key});
+
+  @override
+  _GamesPageState createState() => _GamesPageState();
+}
+
+class _GamesPageState extends State<GamesPage> {
   static const platform = MethodChannel('com.example.flutter_application_1/unity');
+  Map<String, double> _progress = {'science': 0.0, 'math': 0.0, 'language': 0.0, 'ESL': 0.0};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+    _logSharedPreferences();
+  }
+
+  Future<void> _loadProgress() async {
+    final progress = await ProgressCalculator.getAllProgress();
+    setState(() {
+      _progress = progress;
+    });
+    print('GamesPage: Loaded progress: $_progress');
+  }
+
+  Future<void> _logSharedPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = [
+      'science_count',
+      'math_count',
+      'language_count',
+      'ESL_count',
+      'science_game_time',
+      'math_game_time',
+      'language_game_time',
+      'ESL_game_time',
+      'science_start_time',
+      'math_start_time',
+      'language_start_time',
+      'ESL_start_time',
+    ];
+    for (final key in keys) {
+      final value = prefs.get(key);
+      print('GamesPage: SharedPreferences[$key] = $value');
+    }
+  }
 
   Future<void> _startUnity() async {
     try {
       String result = await platform.invokeMethod('startUnity');
-      print(result); // "Unity Launched"
+      print(result);
     } on PlatformException catch (e) {
       print("Failed to launch Unity: '${e.message}'.");
     }
   }
 
-  void _navigateToAmharicGame(BuildContext context) {
-    Navigator.push(
+  Future<void> _navigateToGame(
+    BuildContext context,
+    Widget gamePage,
+    String category,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    print('GamesPage: Navigating to $category game');
+
+    final currentCount = prefs.getInt('${category}_count') ?? 0;
+    final newCount = currentCount + 1;
+    await prefs.setInt('${category}_count', newCount);
+    print('GamesPage: $category press count updated to $newCount');
+
+    final startTime = DateTime.now().millisecondsSinceEpoch;
+    await prefs.setInt('${category}_start_time', startTime);
+
+    await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => AmharicLetterGame()),
+      MaterialPageRoute(builder: (context) => gamePage),
     );
+
+    final endTime = DateTime.now().millisecondsSinceEpoch;
+    final durationMs = endTime - startTime;
+    final durationSeconds = (durationMs / 1000).toDouble();
+
+    await ProgressCalculator.updateGameTime(category, durationSeconds);
+    print('GamesPage: $category game session duration: $durationSeconds seconds');
+
+    await _loadProgress();
+    await _logSharedPreferences();
   }
 
-  void _navigateToSpaceGame(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => SpaceGame()),
-    );
+  void _navigateToLanguageGame(BuildContext context) {
+    _navigateToGame(context, AmharicLetterGame(), 'language');
   }
 
-  void _navigateToNumbersGame(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => NumbersGame()),
-    );
+  void _navigateToLanguageGame2(BuildContext context) {
+    _navigateToGame(context, EnglishLetterGame(), 'language');
+  }
+
+  void _navigateToScienceGame(BuildContext context) {
+    _navigateToGame(context, SpaceGame(), 'science');
+  }
+
+  void _navigateToMathGame(BuildContext context) {
+    _navigateToGame(context, NumbersGame(), 'math');
+  }
+
+  void _navigateToESLGame(BuildContext context) {
+    _navigateToGame(context, GameScreen(), 'ESL');
   }
 
   @override
@@ -46,7 +195,7 @@ class GamesPage extends StatelessWidget {
         return true;
       },
       child: Scaffold(
-        backgroundColor: Color(0xFFF7F1E5),
+        backgroundColor: const Color(0xFFF7F1E5),
         body: Stack(
           children: [
             Positioned.fill(
@@ -59,7 +208,7 @@ class GamesPage extends StatelessWidget {
             ),
             SafeArea(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,7 +217,7 @@ class GamesPage extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          SizedBox(height: 20),
+                          const SizedBox(height: 20),
                           Expanded(
                             child: SingleChildScrollView(
                               child: Column(
@@ -77,44 +226,79 @@ class GamesPage extends StatelessWidget {
                                   Transform.rotate(
                                     angle: 90 * 3.14159 / 180,
                                     child: GestureDetector(
-                                      onTap: () => _navigateToAmharicGame(context),
+                                      onTap: () => _navigateToLanguageGame(context),
                                       child: GameCard(
-                                        title: "Amharic letter",
+                                        title: "Amharic Letters",
                                         imagePath: 'assets/cover1.png',
-                                        imageWidth: 160, // Example width
-                                        imageHeight: 160, // Example height
-                                        imageLeft: 20, // Example left position
-                                        imageTop: 40, // Example top position
+                                        imageWidth: 160,
+                                        imageHeight: 160,
+                                        imageLeft: 20,
+                                        imageTop: 40,
+                                        progress: _progress['language'] ?? 0.0,
                                       ),
                                     ),
                                   ),
-                                  SizedBox(height: 40),
+                                  const SizedBox(height: 40),
                                   Transform.rotate(
                                     angle: 90 * 3.14159 / 180,
                                     child: GestureDetector(
-                                      onTap: () => _navigateToSpaceGame(context),
+                                      onTap: () => _navigateToLanguageGame2(context),
+                                      child: GameCard(
+                                        title: "English Letters",
+                                        imagePath: 'assets/cover2.png',
+                                        imageWidth: 160,
+                                        imageHeight: 160,
+                                        imageLeft: 20,
+                                        imageTop: 40,
+                                        progress: _progress['language'] ?? 0.0,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 40),
+                                  Transform.rotate(
+                                    angle: 90 * 3.14159 / 180,
+                                    child: GestureDetector(
+                                      onTap: () => _navigateToScienceGame(context),
                                       child: GameCard(
                                         title: "Space Exploration",
                                         imagePath: 'assets/cover2.jpg',
-                                        imageWidth: 250, // Example width
-                                        imageHeight: 350, // Example height
-                                        imageLeft: -30, // Example left position
-                                        imageTop: -50, // Example top position
+                                        imageWidth: 250,
+                                        imageHeight: 350,
+                                        imageLeft: -30,
+                                        imageTop: -50,
+                                        progress: _progress['science'] ?? 0.0,
                                       ),
                                     ),
                                   ),
-                                  SizedBox(height: 40),
+                                  const SizedBox(height: 40),
                                   Transform.rotate(
                                     angle: 90 * 3.14159 / 180,
                                     child: GestureDetector(
-                                      onTap: () => _navigateToNumbersGame(context),
+                                      onTap: () => _navigateToMathGame(context),
                                       child: GameCard(
                                         title: "Numbers",
                                         imagePath: 'assets/cover3.jpg',
-                                        imageWidth: 160, // Example width
-                                        imageHeight: 170, // Example height
-                                        imageLeft: 15, // Example left position
-                                        imageTop: 35, // Example top position
+                                        imageWidth: 160,
+                                        imageHeight: 170,
+                                        imageLeft: 15,
+                                        imageTop: 35,
+                                        progress: _progress['math'] ?? 0.0,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 40),
+                                  Transform.rotate(
+                                    angle: 90 * 3.14159 / 180,
+                                    child: GestureDetector(
+                                      onTap: () => _navigateToESLGame(context),
+                                      child: GameCard(
+                                        title: "ESL",
+                                        imagePath: 'assets/signlanguage.jpg',
+                                        imageWidth: 160,
+                                        imageHeight: 170,
+                                        imageLeft: 15,
+                                        imageTop: 35,
+                                        progress: _progress['ESL'] ?? 0.0,
                                       ),
                                     ),
                                   ),
@@ -126,10 +310,10 @@ class GamesPage extends StatelessWidget {
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.only(left: 10, top: 20),
+                      padding: const EdgeInsets.only(left: 10, top: 20),
                       child: Transform.rotate(
                         angle: 90 * 3.14159 / 180,
-                        child: Text(
+                        child: const Text(
                           "Games",
                           style: TextStyle(
                             fontFamily: 'Rubik',
@@ -153,19 +337,22 @@ class GamesPage extends StatelessWidget {
 
 class GameCard extends StatelessWidget {
   final String title;
-  final String imagePath; // Path to the image asset for this card
-  final double imageWidth; // Width of the image
-  final double imageHeight; // Height of the image
-  final double imageLeft; // Left position of the image
-  final double imageTop; // Top position of the image
+  final String imagePath;
+  final double imageWidth;
+  final double imageHeight;
+  final double imageLeft;
+  final double imageTop;
+  final double progress;
 
-  GameCard({
+  const GameCard({
+    super.key,
     required this.title,
     required this.imagePath,
     required this.imageWidth,
     required this.imageHeight,
     required this.imageLeft,
     required this.imageTop,
+    required this.progress,
   });
 
   @override
@@ -176,7 +363,7 @@ class GameCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.5),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Color(0x44B7AF9A),
             offset: Offset(0, 10),
@@ -186,14 +373,13 @@ class GameCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Title at the top with padding
           Positioned(
             left: 0,
             right: 0,
             top: 20,
             child: Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Rubik',
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -202,7 +388,6 @@ class GameCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ),
-          // Image with manual positioning
           Positioned(
             left: imageLeft,
             top: imageTop,
@@ -211,6 +396,21 @@ class GameCard extends StatelessWidget {
               width: imageWidth,
               height: imageHeight,
               fit: BoxFit.contain,
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 20,
+            child: Text(
+              'Progress: ${progress.toStringAsFixed(1)}%',
+              style: const TextStyle(
+                fontFamily: 'Rubik',
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
         ],

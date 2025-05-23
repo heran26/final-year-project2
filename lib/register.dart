@@ -89,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final url = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/register');
+      final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/register');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

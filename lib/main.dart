@@ -1,4 +1,4 @@
- import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'register.dart';
 import 'login.dart';
 import 'verify.dart';
@@ -6,13 +6,28 @@ import 'reset_password.dart';
 import 'avatar_girl.dart';
 import 'avatar_boy.dart';
 import 'main2.dart';
+import 'translate.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Listen to locale changes
+    AppTranslations.localeNotifier.addListener(() {
+      setState(() {});
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +37,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(fontFamily: 'NotoSansEthiopic'),
+        ),
       ),
+      locale: AppTranslations.localeNotifier.value,
+      supportedLocales: AppTranslations.supportedLocales,
+      localizationsDelegates: AppTranslations.localizationsDelegates,
       initialRoute: '/welcome',
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
@@ -205,10 +226,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             child: SizedBox(
               width: 275 * widthScale,
               height: 21 * heightScale,
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'WELCOME',
-                  style: TextStyle(
+                  AppTranslations.translate('welcome', context),
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF3E3E3E),
@@ -252,10 +273,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Login',
-                    style: TextStyle(
+                    AppTranslations.translate('login', context),
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
                       color: Color(0xDE000000),
@@ -295,10 +316,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   foregroundColor: Colors.transparent,
                   overlayColor: Colors.transparent,
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Register',
-                    style: TextStyle(
+                    AppTranslations.translate('register', context),
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
                       color: Color(0xDE000000),
@@ -312,4 +333,4 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ),
     );
   }
-} 
+}

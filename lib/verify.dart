@@ -32,7 +32,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
 
     try {
       // Verify email
-      final verifyUrl = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/verify');
+      final verifyUrl = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/verify');
       final verifyResponse = await http.post(
         verifyUrl,
         headers: {'Content-Type': 'application/json'},
@@ -51,7 +51,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
         final prefs = await SharedPreferences.getInstance();
         final selectedAvatar = prefs.getString('selected_avatar');
         if (selectedAvatar != null) {
-          final avatarUrl = Uri.parse('https://backend-q7hugy6cd-g4s-projects-7b5d827c.vercel.app/update-avatar');
+          final avatarUrl = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/update-avatar');
           final avatarResponse = await http.post(
             avatarUrl,
             headers: {

@@ -10,7 +10,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'book_assets.dart';
+import 'progress_calculate.dart';
+import 'dart:convert';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,20 +33,21 @@ class PreloadApp extends StatefulWidget {
 
 class _PreloadAppState extends State<PreloadApp> {
   Future<Map<String, dynamic>> _preloadInitialAssets() async {
-    final bookConfig = books.firstWhere(
+    // Fetch all books (hardcoded and admin)
+    final adminBooks = await fetchAdminBooks();
+    final allBooks = [...hardcodedBooks, ...adminBooks];
+    final bookConfig = allBooks.firstWhere(
       (book) => book.bookId == widget.bookId,
       orElse: () => throw Exception('Book not found'),
     );
 
-    // Get the saved page index to preload relevant images
     final prefs = await SharedPreferences.getInstance();
-    final savedPageIndex = prefs.getInt('${widget.bookId}_currentPage') ?? 0;
+    final savedPageIndex = (prefs.getInt('${widget.bookId}_currentPage') ?? 0).clamp(0, bookConfig.pageImageUrls.length - 1);
 
     Map<String, ui.Image> preloadedImages = {};
-    // Preload first two pages, last page (if different), and the page at savedPageIndex
     final initialImageUrls = {
       ...bookConfig.pageImageUrls.take(2),
-      if (savedPageIndex >= 2) bookConfig.pageImageUrls[savedPageIndex],
+      if (savedPageIndex >= 2 && savedPageIndex < bookConfig.pageImageUrls.length) bookConfig.pageImageUrls[savedPageIndex],
       if (bookConfig.pageImageUrls.length > 2) bookConfig.pageImageUrls.last,
     };
 
@@ -51,6 +55,7 @@ class _PreloadAppState extends State<PreloadApp> {
       try {
         final image = await _loadNetworkImage(CachedNetworkImageProvider(url));
         preloadedImages[url] = image;
+        debugPrint("Successfully preloaded image: $url");
       } catch (e) {
         debugPrint("Error loading image $url: $e");
       }
@@ -59,13 +64,13 @@ class _PreloadAppState extends State<PreloadApp> {
     try {
       final bgImage = await _loadNetworkImage(CachedNetworkImageProvider(bookConfig.backgroundImageUrl));
       preloadedImages[bookConfig.backgroundImageUrl] = bgImage;
+      debugPrint("Successfully preloaded background image: ${bookConfig.backgroundImageUrl}");
     } catch (e) {
       debugPrint("Error loading background image: $e");
     }
 
     final tempDir = await getTemporaryDirectory();
     Map<String, String> audioLocalPaths = {};
-    // Preload audio for first two pages and the saved page
     final initialAudioUrls = {
       ...bookConfig.audioUrls.take(2),
       if (savedPageIndex < bookConfig.audioUrls.length && savedPageIndex >= 2) bookConfig.audioUrls[savedPageIndex],
@@ -80,9 +85,13 @@ class _PreloadAppState extends State<PreloadApp> {
           if (response.statusCode == 200) {
             await File(filePath).writeAsBytes(response.bodyBytes);
             audioLocalPaths[url] = filePath;
+            debugPrint("Successfully preloaded audio: $url");
+          } else {
+            debugPrint("Failed to preload audio $url: HTTP ${response.statusCode}");
           }
         } else {
           audioLocalPaths[url] = filePath;
+          debugPrint("Audio already cached: $url");
         }
       } catch (e) {
         debugPrint("Error preloading audio $url: $e");
@@ -107,6 +116,9 @@ class _PreloadAppState extends State<PreloadApp> {
           } else if (snapshot.hasError) {
             debugPrint("FutureBuilder error: ${snapshot.error}");
             return ErrorScreen(
+              errorMessage: snapshot.error is RangeError
+                  ? 'Invalid page index. Please try again.'
+                  : 'Failed to load book. Please check your connection.',
               onRetry: () => setState(() {}),
             );
           } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
@@ -136,10 +148,12 @@ Future<ui.Image> _loadNetworkImage(CachedNetworkImageProvider provider) async {
     (ImageInfo info, bool _) {
       if (!completer.isCompleted) completer.complete(info.image);
       stream.removeListener(listener);
+      debugPrint("Image loaded successfully: ${provider.url}");
     },
     onError: (exception, stackTrace) {
       if (!completer.isCompleted) completer.completeError(exception, stackTrace);
       stream.removeListener(listener);
+      debugPrint("Error loading image ${provider.url}: $exception");
     },
   );
   stream.addListener(listener);
@@ -166,8 +180,11 @@ class LoadingScreen extends StatelessWidget {
 }
 
 class ErrorScreen extends StatelessWidget {
+  final String errorMessage;
   final VoidCallback? onRetry;
-  const ErrorScreen({super.key, this.onRetry});
+
+  const ErrorScreen({super.key, this.errorMessage = 'Failed to load book. Please check your connection.', this.onRetry});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -175,9 +192,9 @@ class ErrorScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Failed to load book. Please check your connection.',
-              style: TextStyle(color: Colors.red, fontSize: 16),
+            Text(
+              errorMessage,
+              style: const TextStyle(color: Colors.red, fontSize: 16),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -260,76 +277,108 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
   double readingProgress = 0.0;
   bool _isLoadingMoreAssets = false;
   bool _isInitialized = false;
+  int _startTime = 0;
+  final storage = const FlutterSecureStorage();
 
   @override
   void initState() {
     super.initState();
     _loadedPages = {};
+    _startTime = DateTime.now().millisecondsSinceEpoch;
+    // Initialize controllers immediately to prevent LateInitializationError
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          currentPageIndex = isTurningForward ? currentPageIndex + 1 : currentPageIndex - 1;
+          _updateProgressAndSave();
+          isAnimating = false;
+          _controller.reset();
+          if (currentPageIndex % 2 == 1 && !_isLoadingMoreAssets) {
+            _preloadNextChunk();
+          }
+        });
+      }
+    });
+    _slideController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          isSliding = false;
+          _slideController.reset();
+          isAnimating = true;
+          _controller.forward();
+          _updateProgressAndSave();
+        });
+      }
+    });
     _initializeBook();
   }
 
   Future<void> _initializeBook() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      final savedPageIndex = _prefs.getInt('${widget.bookId}_currentPage') ?? 0;
+      final savedPageIndex = (_prefs.getInt('${widget.bookId}_currentPage') ?? 0).clamp(0, widget.bookConfig.pageImageUrls.length - 1);
+      // Fetch progress from backend
+      final token = await storage.read(key: 'jwt_token');
+      int backendPageIndex = savedPageIndex;
+      double backendProgress = _prefs.getDouble('${widget.bookId}_progress') ?? 0.0;
+
+      if (token != null) {
+        final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/book-progress');
+        final response = await http.get(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final bookProgress = data['bookProgress'] ?? {};
+          if (bookProgress[widget.bookId] != null) {
+            backendPageIndex = (bookProgress[widget.bookId]['currentPage'] ?? savedPageIndex).clamp(0, widget.bookConfig.pageImageUrls.length - 1);
+            backendProgress = bookProgress[widget.bookId]['progress']?.toDouble() ?? backendProgress;
+            // Update local storage to sync with backend
+            await _prefs.setInt('${widget.bookId}_currentPage', backendPageIndex);
+            await _prefs.setDouble('${widget.bookId}_progress', backendProgress);
+          }
+        }
+      }
+
       setState(() {
-        currentPageIndex = savedPageIndex.clamp(0, widget.bookConfig.pageImageUrls.length - 1);
+        currentPageIndex = backendPageIndex;
         readingProgress = _calculateProgress();
       });
 
-      // Initialize with preloaded images
       _loadedPages.clear();
       for (int i = 0; i < widget.bookConfig.pageImageUrls.length; i++) {
         final url = widget.bookConfig.pageImageUrls[i];
         if (widget.preloadedImages.containsKey(url)) {
           _loadedPages[i] = widget.preloadedImages[url]!;
+          debugPrint("Assigned preloaded image for page $i: $url");
         }
       }
 
       backgroundImage = widget.preloadedImages[widget.bookConfig.backgroundImageUrl];
+      if (backgroundImage == null) {
+        debugPrint("Background image not preloaded: ${widget.bookConfig.backgroundImageUrl}");
+      }
       _audioPlayer = AudioPlayer();
 
-      // Ensure the current page's image is loaded
       if (!_loadedPages.containsKey(currentPageIndex)) {
         await _loadSpecificPage(currentPageIndex);
       }
 
       _playAudioForPage(currentPageIndex);
 
-      _controller = AnimationController(
-        duration: const Duration(milliseconds: 800),
-        vsync: this,
-      );
-      _slideController = AnimationController(
-        duration: const Duration(milliseconds: 400),
-        vsync: this,
-      );
-      _controller.addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            currentPageIndex = isTurningForward ? currentPageIndex + 1 : currentPageIndex - 1;
-            _updateProgressAndSave();
-            isAnimating = false;
-            _controller.reset();
-            if (currentPageIndex % 2 == 1 && !_isLoadingMoreAssets) {
-              _preloadNextChunk();
-            }
-          });
-        }
-      });
-      _slideController.addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            isSliding = false;
-            _slideController.reset();
-            isAnimating = true;
-            _controller.forward();
-            _updateProgressAndSave();
-          });
-        }
-      });
-
-      // Preload additional pages if needed
       await _preloadNextChunk();
 
       setState(() {
@@ -352,9 +401,9 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
       final image = await _loadNetworkImage(CachedNetworkImageProvider(url));
       setState(() {
         _loadedPages[pageIndex] = image;
+        debugPrint("Loaded specific page $pageIndex: $url");
       });
 
-      // Also preload the audio for this page
       final tempDir = await getTemporaryDirectory();
       final audioUrl = widget.bookConfig.audioUrls[pageIndex];
       final fileName = audioUrl.split('/').last;
@@ -363,6 +412,9 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
         final response = await http.get(Uri.parse(audioUrl));
         if (response.statusCode == 200) {
           await File(filePath).writeAsBytes(response.bodyBytes);
+          debugPrint("Downloaded audio for page $pageIndex: $audioUrl");
+        } else {
+          debugPrint("Failed to download audio $audioUrl: HTTP ${response.statusCode}");
         }
       }
     } catch (e) {
@@ -385,6 +437,7 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
             final image = await _loadNetworkImage(CachedNetworkImageProvider(url));
             setState(() {
               _loadedPages[i] = image;
+              debugPrint("Preloaded page $i: $url");
             });
           } catch (e) {
             debugPrint("Error loading page $i: $e");
@@ -402,6 +455,9 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
             final response = await http.get(Uri.parse(url));
             if (response.statusCode == 200) {
               await File(filePath).writeAsBytes(response.bodyBytes);
+              debugPrint("Preloaded audio for page $i: $url");
+            } else {
+              debugPrint("Failed to preload audio $url: HTTP ${response.statusCode}");
             }
           }
         } catch (e) {
@@ -420,16 +476,52 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
     return ((currentPageIndex + 1) / totalPages * 100).clamp(0.0, 100.0);
   }
 
-  void _updateProgressAndSave() {
+  void _updateProgressAndSave() async {
     setState(() {
       readingProgress = _calculateProgress();
     });
-    _prefs.setInt('${widget.bookId}_currentPage', currentPageIndex);
-    _prefs.setDouble('${widget.bookId}_progress', readingProgress);
+
+    try {
+      await _prefs.setInt('${widget.bookId}_currentPage', currentPageIndex);
+      await _prefs.setDouble('${widget.bookId}_progress', readingProgress);
+      debugPrint('BookReader: Updated ${widget.bookId} progress: $readingProgress%');
+
+      // Update progress on backend
+      final token = await storage.read(key: 'jwt_token');
+      if (token != null) {
+        final url = Uri.parse('https://backend-lesu72cxy-g4s-projects-7b5d827c.vercel.app/update-book-progress');
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'bookId': widget.bookId,
+            'currentPage': currentPageIndex,
+            'progress': readingProgress,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          debugPrint("Successfully updated book progress on backend: bookId=${widget.bookId}, page=$currentPageIndex, progress=$readingProgress%");
+        } else {
+          debugPrint("Failed to update book progress on backend: ${response.body}");
+        }
+      }
+    } catch (e) {
+      debugPrint("Error saving progress: $e");
+    }
   }
 
   @override
   void dispose() {
+    final endTime = DateTime.now().millisecondsSinceEpoch;
+    final durationMs = endTime - _startTime;
+    final durationSeconds = (durationMs / 1000).toDouble();
+    ProgressCalculator.updateBookTime(widget.bookId, durationSeconds);
+    debugPrint('BookReader: Session duration for ${widget.bookId}: $durationSeconds seconds');
+
     _controller.dispose();
     _slideController.dispose();
     _audioPlayer.dispose();
@@ -446,15 +538,18 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
       if (await File(filePath).exists()) {
         await _audioPlayer.stop();
         await _audioPlayer.play(DeviceFileSource(filePath));
+        debugPrint("Playing cached audio for page $pageIndex: $filePath");
       } else {
         debugPrint("Audio file for page $pageIndex not found");
-        // Attempt to download the audio file
         try {
           final response = await http.get(Uri.parse(audioUrl));
           if (response.statusCode == 200) {
             await File(filePath).writeAsBytes(response.bodyBytes);
             await _audioPlayer.stop();
             await _audioPlayer.play(DeviceFileSource(filePath));
+            debugPrint("Downloaded and played audio for page $pageIndex: $audioUrl");
+          } else {
+            debugPrint("Failed to download audio $audioUrl: HTTP ${response.statusCode}");
           }
         } catch (e) {
           debugPrint("Error downloading audio for page $pageIndex: $e");
@@ -509,7 +604,6 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
         }
       });
     } else {
-      // Load the next page if not available
       _loadSpecificPage(currentPageIndex + 1).then((_) {
         if (_checkImagesForTurn(true)) {
           setState(() {
@@ -538,7 +632,6 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
         _playAudioForPage(currentPageIndex - 1);
       });
     } else {
-      // Load the previous page if not available
       _loadSpecificPage(currentPageIndex - 1).then((_) {
         if (_checkImagesForTurn(false)) {
           setState(() {
@@ -564,7 +657,6 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
 
     final image = _loadedPages[imageAssetIndex];
     if (image == null) {
-      // Trigger loading of the specific page
       _loadSpecificPage(imageAssetIndex);
       return Container(
         color: Colors.grey[200],
@@ -605,7 +697,7 @@ class _BookReaderState extends State<BookReader> with TickerProviderStateMixin {
               text: widget.bookConfig.pageTexts[imageAssetIndex] ?? 'No text available',
               width: textBoxWidth,
               height: textBoxHeight,
-              durationPerWord: 400,
+              durationPerWord: 1000,
             ),
           ),
       ],
@@ -1010,10 +1102,18 @@ class _ImageHalfPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Log image details for debugging
+    debugPrint('ImageHalfPainter: index=$imageIndex, isLeftHalf=$isLeftHalf, '
+        'imageSize=${image.width}x${image.height}, canvasSize=${size.width}x${size.height}');
+
     Rect srcRect;
+    BoxFit fit = imageIndex == 0 ? BoxFit.contain : BoxFit.fill;
+
     if (imageIndex == 0) {
+      // First page: show full image
       srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
     } else {
+      // Other pages: show left or right half
       double halfWidth = image.width.toDouble() / 2.0;
       srcRect = isLeftHalf
           ? Rect.fromLTWH(0, 0, halfWidth, image.height.toDouble())
@@ -1021,10 +1121,13 @@ class _ImageHalfPainter extends CustomPainter {
     }
 
     final dstRect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final BoxFit fit = BoxFit.contain;
     final FittedSizes fittedSizes = applyBoxFit(fit, srcRect.size, dstRect.size);
     final Rect finalSrcRect = Alignment.center.inscribe(fittedSizes.source, srcRect);
     final Rect finalDstRect = Alignment.center.inscribe(fittedSizes.destination, dstRect);
+
+    // Log computed rectangles
+    debugPrint('ImageHalfPainter: srcRect=$srcRect, dstRect=$dstRect, '
+        'finalSrcRect=$finalSrcRect, finalDstRect=$finalDstRect');
 
     canvas.drawImageRect(
       image,

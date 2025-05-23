@@ -14,7 +14,7 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
   Timer? _timer;
   String _selectedAlphabet = 'ሀ'; // Default base alphabet
   List<String> _associatedLetters = []; // Letters associated with the selected alphabet
-  String _currentLetterImage = 'ሀ'; // Track the current letter image (base or associated)
+  String _currentLetterImage = 'ሀ'; // Track the current letter to display
 
   // Animation-related variables for birds.gif
   late AnimationController _animationController;
@@ -62,6 +62,42 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
     'ፀ': ['ፀ', 'ፁ', 'ፂ', 'ፃ', 'ፄ', 'ፅ', 'ፆ'],
     'ፈ': ['ፈ', 'ፉ', 'ፊ', 'ፋ', 'ፌ', 'ፍ', 'ፎ'],
     'ፐ': ['ፐ', 'ፑ', 'ፒ', 'ፓ', 'ፔ', 'ፕ', 'ፖ'],
+  };
+
+  // Audio mapping for letters with shared sounds
+  final Map<String, String> _audioMap = {
+    // Map ሐ and its associated letters to ሀ group audio
+    'ሐ': 'ሀ',
+    'ሑ': 'ሁ',
+    'ሒ': 'ሂ',
+    'ሓ': 'ሃ',
+    'ሔ': 'ሄ',
+    'ሕ': 'ህ',
+    'ሖ': 'ሆ',
+    // Map ኀ and its associated letters to ሀ group audio
+    'ኀ': 'ሀ',
+    'ኁ': 'ሁ',
+    'ኂ': 'ሂ',
+    'ኃ': 'ሃ',
+    'ኄ': 'ሄ',
+    'ኅ': 'ህ',
+    'ኆ': 'ሆ',
+    // Map ሰ and its associated letters to ሠ group audio
+    'ሰ': 'ሠ',
+    'ሱ': 'ሡ',
+    'ሲ': 'ሢ',
+    'ሳ': 'ሣ',
+    'ሴ': 'ሤ',
+    'ስ': 'ሥ',
+    'ሶ': 'ሦ',
+    // Map ዐ and its associated letters to አ group audio
+    'ዐ': 'አ',
+    'ዑ': 'ኡ',
+    'ዒ': 'ኢ',
+    'ዓ': 'ኣ',
+    'ዔ': 'ኤ',
+    'ዕ': 'እ',
+    'ዖ': 'ኦ',
   };
 
   final double _haTargetX = 140;
@@ -125,20 +161,24 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
     sequenceStep();
   }
 
-  void _onTap() {
+  void _triggerAnimation() {
     if (_timer == null || !_timer!.isActive) {
       setState(() {
         _showChar1 = false;
         _showHaInTarget = true;
       });
 
-      _audioPlayer.play(AssetSource('$_currentLetterImage.m4a'));
+      // Use the mapped audio file if available, otherwise use the current letter
+      String audioLetter = _audioMap[_currentLetterImage] ?? _currentLetterImage;
+      _audioPlayer.play(AssetSource('$audioLetter.m4a'));
 
       _timer = Timer(const Duration(milliseconds: 1100), () {
-        setState(() {
-          _showChar1 = true;
-          _showHaInTarget = false;
-        });
+        if (mounted) {
+          setState(() {
+            _showChar1 = true;
+            _showHaInTarget = false;
+          });
+        }
       });
     }
   }
@@ -149,12 +189,14 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
       _associatedLetters = List.from(_alphabetMap[alphabet] ?? []);
       _currentLetterImage = alphabet;
     });
+    _triggerAnimation(); // Play animation when base alphabet is selected
   }
 
   void _onAssociatedLetterSelected(String letter) {
     setState(() {
       _currentLetterImage = letter;
     });
+    _triggerAnimation(); // Play animation when associated letter is selected
   }
 
   @override
@@ -169,7 +211,7 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
-        onTap: _onTap,
+        onTap: _triggerAnimation, // Allow screen tap to replay animation
         child: LayoutBuilder(
           builder: (context, constraints) {
             double screenWidth = constraints.maxWidth;
@@ -274,11 +316,23 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
                   top: _showHaInTarget ? _haTargetY : screenHeight * 0.13,
                   child: Transform.rotate(
                     angle: pi / 2,
-                    child: Image.asset(
-                      'assets/$_currentLetterImage.png',
-                      width: _showHaInTarget ? 140 : 70,
-                      height: _showHaInTarget ? 140 : 70,
-                      fit: BoxFit.fill,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/blank.png',
+                          width: _showHaInTarget ? 140 : 70,
+                          height: _showHaInTarget ? 140 : 70,
+                          fit: BoxFit.fill,
+                        ),
+                        CustomPaint(
+                          size: Size(_showHaInTarget ? 140 : 70, _showHaInTarget ? 140 : 70),
+                          painter: LetterPainter(
+                            letter: _currentLetterImage,
+                            fontSize: _showHaInTarget ? 170 : 90,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -327,6 +381,7 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
       child: Transform.rotate(
         angle: pi / 2,
         child: ElevatedButton(
+          key: ValueKey(alphabet), // Unique key for each button
           onPressed: () {
             _onAlphabetSelected(alphabet);
           },
@@ -341,7 +396,7 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
           ),
           child: Text(
             alphabet,
-            style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 34, color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
       ),
@@ -354,6 +409,7 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
       child: Transform.rotate(
         angle: pi / 2,
         child: ElevatedButton(
+          key: ValueKey(letter), // Unique key for each button
           onPressed: () {
             _onAssociatedLetterSelected(letter);
           },
@@ -368,7 +424,7 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
           ),
           child: Text(
             letter,
-            style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 34, color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
       ),
@@ -381,5 +437,46 @@ class _AmharicLetterGameState extends State<AmharicLetterGame> with SingleTicker
     double scaleWidth = screenWidth / imageWidth;
     double scaleHeight = screenHeight / imageHeight;
     return max(scaleWidth, scaleHeight);
+  }
+}
+
+class LetterPainter extends CustomPainter {
+  final String letter;
+  final double fontSize;
+
+  LetterPainter({required this.letter, required this.fontSize});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textStyle = TextStyle(
+      color: Colors.black,
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+      fontFamily: 'NotoSerifEthiopic',
+    );
+
+    final textSpan = TextSpan(
+      text: letter,
+      style: textStyle,
+    );
+
+    final textPainter = TextPainter(
+      text: textSpan,
+      textDirection: TextDirection.ltr,
+    );
+
+    textPainter.layout();
+
+    final offset = Offset(
+      (size.width - textPainter.width) / 2,
+      (size.height - textPainter.height) / 2,
+    );
+
+    textPainter.paint(canvas, offset);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
   }
 }
